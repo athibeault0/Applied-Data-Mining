@@ -1,0 +1,276 @@
+---
+title: "Peer-To-Peer Lending - Kaggle - STAT 508 Final Project"
+Written by Arielle Thibeault
+output: word_document
+---
+This code goes through the process of cleaning, examining, and performing analysis on our chosen dataset, lending club loan two. We will make a copy, called Lending, of the original data set to manipulate for the purposes of certain analysis, included below:
+```{r}
+install.packages("GGally")
+library(GGally)
+install.packages("ggeffects")
+library(ggeffects)
+install.packages("patchwork")
+library(patchwork)
+install.packages("car")
+library(car)
+install.packages("klaR")
+library(klaR)
+library(ggplot2)
+library(MASS)
+library(readr)
+lending_club_loan_two <- read_csv("Desktop/STAT 508/Final Materials/lending_club_loan_two.csv")
+set.seed(17)
+dim(lending_club_loan_two)
+summary(lending_club_loan_two)
+```
+Important takeaways:
+- 27 variables, 396030 observations
+- ave loan amt = 14114
+- ave int_rate = 13.64
+- ave installment = 431.85
+- ave annual_inc = 74203
+--------------------------
+In the next section, we begin our dataset cleaning process. Here we reassign NA values from pub_rec_bankruptcies and mort_acc, remove all NAs from emp_length, and also add a column for numeric mapping of loan_status for use in later analysis
+```{r}
+datafinal <- lending_club_loan_two
+sum(is.na(datafinal))
+datafinal$pub_rec_bankruptcies[is.na(datafinal$pub_rec_bankruptcies)] <- 0
+datafinal$mort_acc[is.na(datafinal$mort_acc)] <- 0
+datafinal <- datafinal[,-c(7,15,27)]
+datafinal$emp_length[datafinal$emp_length != "< 1 year" &  datafinal$emp_length != "2 years" &  datafinal$emp_length != "3 years" &  datafinal$emp_length != "4 years" &  datafinal$emp_length != "5 years" &  datafinal$emp_length != "6 years" &  datafinal$emp_length != "7 years" &  datafinal$emp_length != "8 years" &  datafinal$emp_length != "9 years" &  datafinal$emp_length != "10+ years"] <- NA
+datafinal <- na.omit(datafinal)
+datafinal$loan_status_num <- datafinal$loan_status
+datafinal[,25][datafinal[,25] == "Fully Paid"] <- "1"
+datafinal[,25][datafinal[,25] == "Charged Off"] <- "0"
+datafinal$loan_status_num <- as.numeric(datafinal$loan_status_num)
+```
+Further in our data preparation, here we will reassign values for convenience for our analysis and create separated datasets for numeric and the original values. Here numdata includes a binary column for loan_status for use later.
+```{r}
+numdata <- datafinal[,-12]
+numdata1 <- numdata #saving this for posterity
+classdata <- datafinal[,-25]
+
+#making term numeric
+unique(numdata$term)
+index1 <- which(numdata$term == "36 months")
+index2 <- which(numdata$term == "60 months")
+numdata$term[index1] <- 36
+numdata$term[index2] <- 60
+numdata$term <- as.numeric(numdata$term)
+
+#making grade numeric, A-G from 1-7
+unique(numdata$grade)
+index3 <- which(numdata$grade == "G")
+index4 <- which(numdata$grade == "F")
+index5 <- which(numdata$grade == "E")
+index6 <- which(numdata$grade == "D")
+index7 <- which(numdata$grade == "C")
+index8 <- which(numdata$grade == "B")
+index9 <- which(numdata$grade == "A")
+numdata$grade[index3] <- 7
+numdata$grade[index4] <- 6
+numdata$grade[index5] <- 5
+numdata$grade[index6] <- 4
+numdata$grade[index7] <- 3
+numdata$grade[index8] <- 2
+numdata$grade[index9] <- 1
+numdata$grade <- as.numeric(numdata$grade)
+
+#employment years
+unique(numdata$emp_length)
+index10 <- which(numdata$emp_length == "< 1 year")
+index11 <- which(numdata$emp_length == "1 year")
+index12 <- which(numdata$emp_length == "2 years")
+index13 <- which(numdata$emp_length == "3 years")
+index14 <- which(numdata$emp_length == "4 years")
+index15 <- which(numdata$emp_length == "5 years")
+index16 <- which(numdata$emp_length == "6 years")
+index17 <- which(numdata$emp_length == "7 years")
+index18 <- which(numdata$emp_length == "8 years")
+index19 <- which(numdata$emp_length == "9 years")
+index20 <- which(numdata$emp_length == "10+ years")
+numdata$emp_length[index10] <- 0
+numdata$emp_length[index11] <- 1
+numdata$emp_length[index12] <- 2
+numdata$emp_length[index13] <- 3
+numdata$emp_length[index14] <- 4
+numdata$emp_length[index15] <- 5
+numdata$emp_length[index16] <- 6
+numdata$emp_length[index17] <- 7
+numdata$emp_length[index18] <- 8
+numdata$emp_length[index19] <- 9
+numdata$emp_length[index20] <- 10
+numdata$emp_length <- as.numeric(numdata$emp_length)
+
+#home ownership
+unique(numdata$home_ownership)
+index21 <- which(numdata$home_ownership =="OWN")
+index22 <- which(numdata$home_ownership =="MORTGAGE")
+index23 <- which(numdata$home_ownership =="RENT")
+index24 <- which(numdata$home_ownership =="ANY")
+index25 <- which(numdata$home_ownership =="OTHER")
+index26 <- which(numdata$home_ownership =="NONE")
+numdata$home_ownership[index21] <- 1
+numdata$home_ownership[index22] <- 2
+numdata$home_ownership[index23] <- 3
+numdata$home_ownership[index24] <- 4
+numdata$home_ownership[index25] <- 5
+numdata$home_ownership[index26] <- 6
+numdata$home_ownership <- as.numeric(numdata$home_ownership)
+```
+Below are some distribution visualizations
+```{r}
+qplot(lending_club_loan_two$loan_status, main = "Distribution of Loan Status", ylab = "Frequency", xlab = "Loan Status Spread") + geom_bar()
+
+qplot(lending_club_loan_two$term, main = "Distribution of Given Loan Terms", ylab = "Frequency", xlab = "Loan Term Spread") + geom_bar()
+
+qplot(lending_club_loan_two$home_ownership, main = "Type of Home Ownership", ylab = "Frequency", xlab = "Homew Ownership Type") + geom_bar()
+
+qplot(lending_club_loan_two$purpose, main = "Reason for Loan", ylab = "Frequency", xlab = "Loan Use") + geom_bar() + theme(axis.text.x = element_text(angle = 45, vjust = 0.5))
+
+qplot(lending_club_loan_two$int_rate, geom= "histogram", main = "Distribution of Interest Rates", ylab = "Frequency", xlab = "Interest Rates") + 
+  geom_histogram(aes(fill = ..count..)) +
+    scale_fill_gradient("Count", low = "black", high = "gray")
+
+qplot(lending_club_loan_two$installment, geom= "histogram", main = "Distribution of Payment Installments", ylab = "Frequency", xlab = "Installments") + 
+  geom_histogram(aes(fill = ..count..)) +
+    scale_fill_gradient("Count", low = "black", high = "gray")
+
+qplot(Lending$loan_amnt, geom= "histogram", main = "Distribution of the Lending Loan Amount", ylab = "Frequency", xlab = "Listed Loan Amount") + 
+  geom_histogram(aes(fill = ..count..)) + 
+  scale_fill_gradient("Count", low = "black", high = "seagreen2")
+
+quantile(Lending$annual_inc, probs = c(0.05, 0.95))
+qplot(Lending$annual_inc, geom= "histogram", main = "Distribution of the Loan Recipient's Annual Income", ylab = "Frequency", xlab = "Annual Income", xlim = c(28000,150000)) + 
+  geom_histogram(aes(fill = ..count..)) + 
+  scale_fill_gradient("Count", low = "black", high = "orange")
+
+#ggplot(lending_club_loan_two, aes(x = grade, y = loan_status)) +
+#  geom_col(position = "dodge", colour = 'red')
+```
+Correlation Plot
+```{r}
+ggcorr(lending_club_loan_two, low = "springgreen4", mid = "white", high = "hotpink4") + ggtitle(label = "Correlation Plot")
+
+ggcorr(numdata, low = "springgreen4", mid = "white", high = "hotpink4") + ggtitle(label = "Correlation Plot")
+```
+Logistic Regression for Classification
+- Check the predictors
+```{r}
+Loan.fit <- glm(loan_status_num~loan_amnt+term+int_rate+installment+grade+sub_grade+emp_length+home_ownership+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+initial_list_status+application_type+mort_acc+pub_rec_bankruptcies, data = numdata, family = "binomial")
+summary(Loan.fit)
+```
+From the summary, it appears that only the variable initial_list_status is not significant for alpha = 0.05, as all other coefficient estimate p-values are much smaller than alpha. We can check our hypothesis by comparing to a Chi-Square Statistic with the same degrees of freedom
+```{r}
+1-pchisq(343716-311851, 351603-351536)
+```
+Additionally, to dissolve any issues of collinearity, we will remove the sub_grade predictor as several of the sub_grade values are not significant predictors of loan_status. (we can easily check that the removal does not significantly affect the prediction power of the model)
+
+Now we refit without initial_list_status and sub_grade
+```{r}
+Loan.fit <- glm(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+home_ownership+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+application_type+mort_acc+pub_rec_bankruptcies, data = numdata, family = "binomial")
+summary(Loan.fit)
+```
+Let's repeat this with the original data (not transformed) and see if we get any different results:
+```{r}
+Loan.fita <- glm(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+home_ownership+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+initial_list_status+application_type+mort_acc+pub_rec_bankruptcies, data = numdata1, family = "binomial")
+summary(Loan.fita)
+```
+From this output, we indeed see a different outcome: here, home_ownership and initial_list_status are not significant, while all others are significant up to 0.05 alpha level
+
+Let's fit another model with these removed:
+```{r}
+Loan.fita <- glm(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+application_type+mort_acc+pub_rec_bankruptcies, data = numdata1, family = "binomial")
+summary(Loan.fita)
+coef(Loan.fita)
+```
+Now let's check our hypothesis by comparing to a Chi-Square Statistic with the same degrees of freedom
+```{r}
+1-pchisq(343716-313093, 351603-351558)
+```
+Since the p-value is effectively zero and definitely less than 0.05, we reject the null hypothesis and conclude that there is a statistically significant relationship between loan_status_num, loan_amnt, term, int_rate, installment, grade, emp_length, annual_inc, verification_status, purpose, dti, open_acc, pub_rec, revol_bal, revol_util, total_acc, application_type, mort_acc, and pub_rec_bankruptcies.
+
+Given that this is a mirror of the original dataset and our hypothesis passed, we will move forward with these predictors.
+
+Let's fit this on a training dataset. Given the size of our set, we can allocate a large proportion to the training set. We choose 50%.
+```{r}
+n <- dim(numdata1)
+train <- sample(1:n, n/2)
+test <- (1:n)[-train]
+
+Loan.fita.train <- glm(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+application_type+mort_acc+pub_rec_bankruptcies, data = numdata1[train,], family = "binomial")
+summary(Loan.fita.train)
+coef(Loan.fita.train)
+```
+Below we compute the confusion matrix, or the error matrix, displaying the performance 
+```{r}
+Loan.probs <- predict(Loan.fita.train, newdata = numdata1[train,], type = "response")
+length(Loan.probs)
+Loan.pred <- rep("Charged Off", 175802)
+Loan.pred[Loan.probs > .5] = "Fully Paid"
+table(predict = Loan.pred, truth = numdata1[train,]$loan_status_num)
+```
+From the table we see that our training model made correct predictions (1707+140773)/175802 = 0.81045721891 or 81.05% of the time. This is considerable.
+
+Now we fit our model to the test set and evaluate performance as this is really the metric we care about for measuring predictive power.
+```{r}
+Loan.fita.test <- glm(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+application_type+mort_acc+pub_rec_bankruptcies, data = numdata1[test,], family = "binomial")
+summary(Loan.fita.test)
+coef(Loan.fita.test)
+
+Loan.probs <- predict(Loan.fita.test, newdata = numdata1[test,], type = "response")
+length(Loan.probs)
+Loan.pred <- rep("Charged Off", 175802)
+Loan.pred[Loan.probs > .5] = "Fully Paid"
+table(predict = Loan.pred, truth = numdata1[test,]$loan_status_num)
+
+ggplot(numdata1[test,],aes(x=loan_status_num,y=loan_amnt,color=factor(grade)))+geom_point()+stat_smooth(method="lm",se=FALSE)
+
+plot(ggpredict(Loan.fita.test,"loan_amnt"))
+plot(ggpredict(Loan.fita.test,"grade"))
+```
+From the table we see that our test model made correct predictions (1647+140607)/175802 = 0.80917168177 or 80.92% of the time. This is approximately the same to that of our training set and is still fairly good.
+
+
+Linear Discriminant Analysis
+```{r}
+Loan.lda.train <- lda(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+application_type+mort_acc+pub_rec_bankruptcies, data = numdata1[train,], family = binomial)
+summary(Loan.lda.train)
+Loan.lda.pred <- predict(Loan.lda.train, newdata = numdata1[train,])
+table(Loan.lda.pred$class, numdata1[train,]$loan_status_num)
+mean(Loan.lda.pred$class==numdata1[train,]$loan_status_num)
+```
+The LDA training model predicts the loan status correctly 0.8085744 or 80.86% of the time. Let's now check the testing model:
+```{r}
+Loan.lda.test <- lda(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+application_type+mort_acc+pub_rec_bankruptcies, data = numdata1[test,], family = binomial)
+summary(Loan.lda.test)
+Loan.lda.test.pred <- predict(Loan.lda.test, newdata = numdata1[test,])
+table(Loan.lda.test.pred$class, numdata1[test,]$loan_status_num)
+mean(Loan.lda.test.pred$class==numdata1[test,]$loan_status_num)
+
+lda_plot <- cbind(numdata1[test,], Loan.lda.test.pred$x)
+ggplot(lda_plot, aes(LD1,loan_amnt)) + geom_point(aes(color = loan_status_num))
+ggplot(lda_plot, aes(LD1,grade)) + geom_point(aes(color = loan_status_num))
+```
+The LDA test model predicts the loan status correctly 0.8075221 or 80.75% of the time. 
+
+Quadratic Discriminant Analysis
+Training model first:
+```{r}
+Loan.qda.train <- qda(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+application_type+mort_acc+pub_rec_bankruptcies, data = numdata1[train,])
+summary(Loan.qda.train)
+Loan.qda.train.pred <- predict(Loan.qda.train, numdata1[train,])$class
+table(Loan.qda.train.pred, numdata1[train,]$loan_status_num)
+mean(Loan.qda.train.pred==numdata1[train,]$loan_status_num)
+```
+The QDA train model predicts the loan status correctly 0.7530233 or 75.30% of the time.
+
+Now onto the test QDA model:
+```{r}
+Loan.qda.test <- qda(loan_status_num~loan_amnt+term+int_rate+installment+grade+emp_length+annual_inc+verification_status+purpose+dti+open_acc+pub_rec+revol_bal+revol_util+total_acc+application_type+mort_acc+pub_rec_bankruptcies, data = numdata1[test,])
+summary(Loan.qda.test)
+Loan.qda.test.pred <- predict(Loan.qda.test, numdata1[test,])$class
+table(Loan.qda.test.pred, numdata1[test,]$loan_status_num)
+mean(Loan.qda.test.pred==numdata1[test,]$loan_status_num)
+```
+The QDA test model predicts the loan status correctly 0.7551791 or 75.52% of the time.
